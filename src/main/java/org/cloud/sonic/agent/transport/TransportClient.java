@@ -203,6 +203,7 @@ public class TransportClient extends WebSocketClient {
                 }
                 case "hub" -> PHCTool.setPosition(jsonObject.getInteger("position"), jsonObject.getString("type"));
                 case "runStep" -> {
+                    log.info("调试！！！！！！！！！！！！！！！！！！！！！");
                     if (jsonObject.getInteger("pf") == PlatformType.ANDROID) {
                         runAndroidStep(jsonObject);
                     }
