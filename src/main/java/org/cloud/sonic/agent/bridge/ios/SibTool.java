@@ -20,6 +20,7 @@ package org.cloud.sonic.agent.bridge.ios;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import lombok.extern.slf4j.Slf4j;
 import org.cloud.sonic.agent.common.interfaces.DeviceStatus;
 import org.cloud.sonic.agent.common.interfaces.PlatformType;
 import org.cloud.sonic.agent.common.maps.*;
@@ -50,10 +51,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Semaphore;
 
 import static org.cloud.sonic.agent.tools.BytesTool.sendText;
@@ -62,6 +60,7 @@ import static org.cloud.sonic.agent.tools.BytesTool.sendText;
 @DependsOn({"iOSThreadPoolInit"})
 @Component
 @Order(value = Ordered.HIGHEST_PRECEDENCE)
+@Slf4j
 public class SibTool implements ApplicationListener<ContextRefreshedEvent> {
     private static final Logger logger = LoggerFactory.getLogger(SibTool.class);
     @Value("${modules.ios.wda-bundle-id}")
@@ -148,12 +147,7 @@ public class SibTool implements ApplicationListener<ContextRefreshedEvent> {
             GlobalProcessMap.getMap().put(processName, listenProcess);
         });
 
-        ScheduleTool.scheduleAtFixedRate(
-                new IOSBatteryThread(),
-                IOSBatteryThread.DELAY,
-                IOSBatteryThread.DELAY,
-                IOSBatteryThread.TIME_UNIT
-        );
+        ScheduleTool.scheduleAtFixedRate(new IOSBatteryThread(), IOSBatteryThread.DELAY, IOSBatteryThread.DELAY, IOSBatteryThread.TIME_UNIT);
 
         logger.info("iOS devices listening...");
     }
@@ -231,8 +225,7 @@ public class SibTool implements ApplicationListener<ContextRefreshedEvent> {
         int wdaPort = PortTool.releaseAndGetPort(wda);
         int mjpegPort = PortTool.releaseAndGetPort(mjpeg);
         Process wdaProcess = null;
-        String commandLine = "%s run wda -u %s -b %s --mjpeg-remote-port 9100" +
-                " --server-remote-port 8100 --mjpeg-local-port %d --server-local-port %d";
+        String commandLine = "%s run wda -u %s -b %s --mjpeg-remote-port 9100" + " --server-remote-port 8100 --mjpeg-local-port %d --server-local-port %d";
         String system = System.getProperty("os.name").toLowerCase();
         if (system.contains("win")) {
             wdaProcess = Runtime.getRuntime().exec(new String[]{"cmd", "/c", String.format(commandLine, sib, udId, bundleId, mjpegPort, wdaPort)});
@@ -311,6 +304,10 @@ public class SibTool implements ApplicationListener<ContextRefreshedEvent> {
             ps.children().forEach(ProcessHandle::destroy);
             ps.destroy();
         }
+    }
+
+    public static void getCaseLit() {
+        logger.info("getCaseLit");
     }
 
     public static void getSysLog(String udId, String filter, Session session) {
@@ -466,6 +463,80 @@ public class SibTool implements ApplicationListener<ContextRefreshedEvent> {
         }
         logger.info("app list done.");
     }
+
+    public static void getRunTestCase(String udId, String caseList, String pathUrl, Session session) {
+        log.info("udId------>  {}", udId);
+        log.info("caseList------>  {}", caseList);
+        log.info("pathUrl------>  {}", pathUrl);
+
+        JSONObject jsonObject = JSON.parseObject(pathUrl);
+        String jsonPath = jsonObject.get("_value").toString();
+        JSONObject jsonObject1 = JSON.parseObject(udId);
+        JSONObject jsonUUID = (JSONObject) jsonObject1.get("_value");
+        JSONObject jsonObject2 = JSON.parseObject(caseList);
+        JSONArray caseList1 = (JSONArray) jsonObject2.get("_value");
+        List<Object> deta = new ArrayList<>();
+        for (Object o : caseList1) {
+            JSONObject caseList2 = JSON.parseObject(o.toString());
+            deta.add(caseList2.get("name"));
+        }
+        System.out.println(deta);
+
+        try {
+            // "python3", "python文件的绝对地址", "参数一", "参数二"
+            if (deta.size() > 0) {
+                for (int j = 0; j < deta.size(); j++) {
+                    log.info("执行的文件名称 ------> {}", deta.get(j));
+                    String[] args1 = new String[]{"python3", jsonPath + "/" + deta.get(j)};
+                    log.info("python3 {} {}", jsonPath + "/" + deta.get(j), jsonUUID.get("udId"));
+                    Process proc = Runtime.getRuntime().exec(args1);
+                    BufferedReader in = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+                    String line = null;
+                    while ((line = in.readLine()) != null) {
+                        log.info("输出Python文件内容: {}", line);
+                        sendText(session, line);
+                    }
+                    in.close();
+                    proc.waitFor();
+                }
+            }
+
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void getCaseList(String udId, Session session) {
+        log.info("udId: {}     session: {}", udId, session);
+        JSONObject jsonObject = JSON.parseObject(udId);
+        jsonObject.get("_value");
+        if (jsonObject.get("_value").equals("")) {
+            return;
+        }
+        String path = jsonObject.get("_value").toString();
+        File f = new File(path);//获取路径
+        if (!f.exists()) {
+            log.info(path + " not exists");//不存在就输出
+        }
+        File[] fa = f.listFiles();//用数组接收
+        List<Object> deta = new ArrayList<>();
+        //获取数组中的第i个
+        for (File fs : fa != null ? fa : new File[0]) {//循环遍历
+            if (fs.isDirectory()) {
+            } else {
+                deta.add(fs.getName());
+            }
+        }
+        JSONObject processListzName = new JSONObject();
+        JSONObject processList = new JSONObject();
+        for (Object o : deta) {
+            processListzName.put("name", o);
+            processList.put("msg", "processListDetailsss");
+            processList.put("detail", processListzName);
+            sendText(session, processList.toJSONString());
+        }
+    }
+
 
     public static void getProcessList(String udId, Session session) {
         Process appProcess = null;
@@ -759,8 +830,7 @@ public class SibTool implements ApplicationListener<ContextRefreshedEvent> {
         }
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Type", "application/json");
-        ResponseEntity<JSONArray> responseEntity =
-                restTemplate.exchange("http://localhost:" + port + "/json/list", HttpMethod.GET, new HttpEntity(headers), JSONArray.class);
+        ResponseEntity<JSONArray> responseEntity = restTemplate.exchange("http://localhost:" + port + "/json/list", HttpMethod.GET, new HttpEntity(headers), JSONArray.class);
         if (responseEntity.getStatusCode() == HttpStatus.OK) {
             return responseEntity.getBody().toJavaList(JSONObject.class);
         } else {

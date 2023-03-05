@@ -85,6 +85,8 @@ public class IOSTerminalWSServer implements IIOSWSServer {
             case "appList" -> SibTool.getAppList(udId, session);
             case "syslog" -> SibTool.getSysLog(udId, msg.getString("filter"), session);
             case "stopSyslog" -> SibTool.stopSysLog(udId);
+            case "processListsss" -> SibTool.getCaseList(msg.getString("path"), session);
+            case "processListsssaaa" -> SibTool.getRunTestCase(msg.getString("uuid"),msg.getString("caseList"),msg.getString("path"), session);
         }
     }
 
